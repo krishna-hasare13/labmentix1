@@ -40,3 +40,12 @@
 .read-the-docs {
   color: #888;
 }
+
+
+@keyframes shine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.animate-shine {
+  animation: shine 1s ease-in-out infinite;
+}

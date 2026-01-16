@@ -4,9 +4,9 @@ const { v4: uuidv4 } = require('uuid');
 const supabase = require('../config/supabase');
 const jwt = require('jsonwebtoken');
 const { getAccessLevel } = require('../utils/permissions');
-const { logActivity } = require('../utils/logger'); // <--- Import Logger
+const { logActivity } = require('../utils/logger');
 
-// Middleware: Verify Token
+// --- MIDDLEWARE: Verify Token ---
 const verifyToken = (req, res, next) => {
     const token = req.header('Authorization');
     if (!token) return res.status(401).json({ error: 'Access Denied' });
@@ -39,7 +39,7 @@ const attachStarStatus = async (userId, files) => {
     }));
 };
 
-// --- HELPER 2: Attach 'thumbnailUrl' (NEW) ---
+// --- HELPER 2: Attach 'thumbnailUrl' ---
 const attachThumbnails = async (files) => {
     if (!files || files.length === 0) return [];
 
@@ -49,7 +49,13 @@ const attachThumbnails = async (files) => {
 
     // 2. Get batch signed URLs (valid for 1 hour)
     const paths = imageFiles.map(f => f.storage_key);
-    const { data: signedUrls, error } = await supabase.storage.from('drive').createSignedUrls(paths, 3600);
+    
+    // IMPORTANT: Make sure 'drive' matches your Supabase Storage Bucket name exactly!
+    // If your bucket is named 'files', change 'drive' to 'files' below.
+    const { data: signedUrls, error } = await supabase
+        .storage
+        .from('drive') 
+        .createSignedUrls(paths, 3600);
 
     if (error) {
         console.error("Thumbnail generation error:", error);
@@ -60,6 +66,7 @@ const attachThumbnails = async (files) => {
     const urlMap = {};
     if (signedUrls) {
         signedUrls.forEach(item => {
+            // Handle both structure variations just in case
             if (item.signedUrl) urlMap[item.path] = item.signedUrl;
         });
     }
@@ -101,7 +108,7 @@ router.get('/search', verifyToken, async (req, res) => {
         if (error) throw error;
         
         let result = await attachStarStatus(userId, data);
-        result = await attachThumbnails(result); // <--- Add Thumbnails
+        result = await attachThumbnails(result);
         
         res.json(result);
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -131,7 +138,7 @@ router.get('/shared', verifyToken, async (req, res) => {
         if (fileError) throw fileError;
 
         let result = await attachStarStatus(userId, files);
-        result = await attachThumbnails(result); // <--- Add Thumbnails
+        result = await attachThumbnails(result);
 
         res.json(result);
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -149,7 +156,7 @@ router.get('/recent', verifyToken, async (req, res) => {
         if (error) throw error;
         
         let result = await attachStarStatus(userId, data);
-        result = await attachThumbnails(result); // <--- Add Thumbnails
+        result = await attachThumbnails(result);
         
         res.json(result);
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -163,6 +170,7 @@ router.delete('/trash/empty', verifyToken, async (req, res) => {
         if (files.length === 0) return res.json({ message: 'Trash is already empty' });
 
         const keysToRemove = files.map(f => f.storage_key);
+        // NOTE: Ensure bucket name matches here too
         await supabase.storage.from('drive').remove(keysToRemove);
         await supabase.from('files').delete().eq('owner_id', userId).eq('is_deleted', true);
 
@@ -194,6 +202,7 @@ router.delete('/trash/:id', verifyToken, async (req, res) => {
         const { data: file } = await supabase.from('files').select('storage_key, name').eq('id', fileId).eq('owner_id', userId).single();
         if (!file) return res.status(404).json({ error: 'File not found' });
 
+        // NOTE: Ensure bucket name matches here too
         await supabase.storage.from('drive').remove([file.storage_key]);
         await supabase.from('files').delete().eq('id', fileId);
         
@@ -226,13 +235,13 @@ router.post('/init', verifyToken, async (req, res) => {
         const { name, sizeBytes, mimeType, folderId } = req.body;
         const userId = req.user.id;
         
-        // 1. Check if file exists
+        // 1. Check if file exists (Versioning)
         let query = supabase.from('files').select('*')
             .eq('owner_id', userId).eq('name', name).eq('is_deleted', false);
         if (folderId) query = query.eq('folder_id', folderId);
         else query = query.is('folder_id', null);
 
-        const { data: existingFile } = await query.maybeSingle(); // Safely handle null
+        const { data: existingFile } = await query.maybeSingle(); 
         let fileId, storageKey;
 
         if (existingFile) {
@@ -270,6 +279,7 @@ router.post('/init', verifyToken, async (req, res) => {
             await logActivity(userId, 'uploaded', 'file', name);
         }
 
+        // NOTE: Ensure bucket name matches here too
         const { data: urlData } = await supabase.storage.from('drive').createSignedUploadUrl(storageKey);
         res.json({ fileId, uploadUrl: urlData.signedUrl, storageKey });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -296,7 +306,7 @@ router.get('/', verifyToken, async (req, res) => {
         if (error) throw error;
 
         let result = await attachStarStatus(userId, data);
-        result = await attachThumbnails(result); // <--- Add Thumbnails
+        result = await attachThumbnails(result); // <--- Add Thumbnails here
 
         res.json(result);
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -320,6 +330,8 @@ router.get('/:id', verifyToken, async (req, res) => {
         if (!file) return res.status(404).json({ error: 'File not found' });
 
         const options = preview === 'true' ? {} : { download: file.name };
+        
+        // NOTE: Ensure bucket name matches here too
         const { data: urlData } = await supabase.storage.from('drive').createSignedUrl(file.storage_key, 60, options);
         
         res.json({ downloadUrl: urlData.signedUrl, mimeType: file.mime_type, role }); 

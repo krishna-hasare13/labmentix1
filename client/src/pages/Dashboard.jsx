@@ -8,6 +8,7 @@ import {
   Link as LinkIcon, Copy, Check, Star, Clock, Activity, History, 
   CheckSquare, LayoutGrid, List as ListIcon, ChevronRight, Home 
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -150,8 +151,34 @@ export default function Dashboard() {
   const openShareModal = async (f) => { setShareFile(f); setSharedUsers([]); setPublicToken(null); setLinkSettingsOpen(false); setLinkPassword(""); setLinkExpiry(""); try{ const res=await axios.get(`${API_URL}/share/${f.id}/status`,{headers:{Authorization:localStorage.getItem("token")}}); setSharedUsers(res.data.users); setPublicToken(res.data.publicToken); }catch(e){console.error(e);} };
   const handleShareSubmit = async () => { if(!shareEmail) return; try{ await axios.post(`${API_URL}/share/${shareFile.id}`, { email: shareEmail, permission: sharePermission }, { headers: { Authorization: localStorage.getItem("token") } }); alert("Shared"); setShareEmail(""); openShareModal(shareFile); }catch(e){alert("Failed");} };
   const handleRevoke = async (uid) => { if(!confirm("Revoke?")) return; try{ await axios.delete(`${API_URL}/share/${shareFile.id}/user/${uid}`, { headers: { Authorization: localStorage.getItem("token") } }); openShareModal(shareFile); }catch(e){alert("Failed");} };
-  const handleToggleLink = async () => { const act = (publicToken && !linkSettingsOpen) ? 'remove' : 'create'; try { const res = await axios.post(`${API_URL}/share/${shareFile.id}/public`, { action: act, password: linkPassword, expiry: linkExpiry }, { headers: { Authorization: localStorage.getItem("token") } }); setPublicToken(res.data.publicToken); if(act==='create') { setLinkSettingsOpen(false); setLinkPassword(""); alert("Updated"); } } catch(e){ alert("Failed"); } };
-  const copyToClipboard = () => { navigator.clipboard.writeText(`${window.location.origin}/share/${publicToken}`); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+const handleToggleLink = async () => {
+  // If we have a token, action is 'remove'. 
+  // If we don't, action is 'create'.
+  const action = publicToken ? 'remove' : 'create'; 
+  
+  try {
+    const res = await axios.post(`${API_URL}/share/${shareFile.id}/public`, { 
+      action, 
+      password: linkPassword, 
+      expiry: linkExpiry 
+    }, { headers: { Authorization: localStorage.getItem("token") } });
+    
+    // Update State with response
+    setPublicToken(res.data.publicToken);
+    
+    if (action === 'create') {
+      setLinkSettingsOpen(false);
+      setLinkPassword("");
+      setLinkExpiry("");
+      alert("Public link created!");
+    } else {
+      alert("Public link disabled.");
+    }
+  } catch (e) {
+    alert("Failed to update link settings");
+    console.error(e);
+  }
+};  const copyToClipboard = () => { navigator.clipboard.writeText(`${window.location.origin}/share/${publicToken}`); setCopied(true); setTimeout(() => setCopied(false), 2000); };
   const handleUpdateProfile = async () => { try { const res = await axios.put(`${API_URL}/auth/profile`, { fullName: editName }, { headers: { Authorization: localStorage.getItem("token") } }); setUser(res.data); setShowProfileModal(false); } catch (e) { alert("Failed"); } };
   const processUpload = async (f) => { try { const initRes = await axios.post(`${API_URL}/files/init`, { name: f.name, sizeBytes: f.size, mimeType: f.type, folderId: currentFolder }, { headers: { Authorization: localStorage.getItem("token") } }); const { uploadUrl } = initRes.data; await axios.put(uploadUrl, f, { headers: { "Content-Type": f.type } }); return true; } catch (err) { console.error(`Failed ${f.name}`, err); return false; } };
   const handleUploadBatch = async (filesList) => { if (!filesList || filesList.length === 0) return; setUploading(true); const uploads = Array.from(filesList).map(file => processUpload(file)); await Promise.all(uploads); setUploading(false); fetchData(); fetchStorage(); };
@@ -246,7 +273,6 @@ export default function Dashboard() {
             </div>
             <div className="hidden md:block text-left">
               <p className="text-xs font-bold text-gray-700 leading-tight">{user?.full_name || "User"}</p>
-              <p className="text-[10px] text-gray-500 leading-tight">Pro Plan</p>
             </div>
           </div>
         </div>
@@ -436,47 +462,74 @@ export default function Dashboard() {
               {view !== 'activity' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {files.map((f) => {
-                      const isSelected = selectedItems.has(`file_${f.id}`);
-                      return (
-                      <div key={f.id} className={`bg-white rounded-2xl shadow-sm hover:shadow-lg border border-gray-100 transition-all duration-300 group relative hover:-translate-y-1 ${isSelected ? 'ring-2 ring-blue-500' : ''}`}>
-                      <div className={`absolute top-3 left-3 z-10 ${isSelected ? 'block' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
-                            <input type="checkbox" checked={isSelected} onChange={() => toggleSelection(f.id, 'file')} className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer shadow-md bg-white"/>
-                      </div>
-                      
-                      {/* PREVIEW AREA */}
-                      <div className="h-40 w-full bg-gray-50 rounded-t-2xl flex items-center justify-center overflow-hidden cursor-pointer relative" onClick={() => handlePreview(f.id, f.name, f.mime_type)}>
-                          {f.thumbnailUrl ? (
-                              <>
-                                <img src={f.thumbnailUrl} alt={f.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300"></div>
-                              </>
-                          ) : (
-                              <div className="p-4 bg-white rounded-2xl shadow-sm text-indigo-500"><FileText size={40}/></div>
-                          )}
-                      </div>
+  const isSelected = selectedItems.has(`file_${f.id}`);
+  return (
+    <div 
+      key={f.id} 
+      className={`bg-white rounded-2xl shadow-sm hover:shadow-lg border border-gray-100 transition-all duration-300 group relative hover:-translate-y-1 ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
+    >
+      {/* Checkbox */}
+      <div className={`absolute top-3 left-3 z-10 ${isSelected ? 'block' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
+        <input 
+          type="checkbox" 
+          checked={isSelected} 
+          onChange={() => toggleSelection(f.id, 'file')} 
+          className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer shadow-md bg-white"
+        />
+      </div>
+      
+      {/* PREVIEW AREA (Updated for Thumbnails) */}
+      <div 
+        className="h-40 w-full bg-gray-50 rounded-t-2xl flex items-center justify-center overflow-hidden cursor-pointer relative border-b border-gray-100" 
+        onClick={() => handlePreview(f.id, f.name, f.mime_type)}
+      >
+          {f.thumbnailUrl ? (
+              <>
+                <img 
+                  src={f.thumbnailUrl} 
+                  alt={f.name} 
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300"></div>
+              </>
+          ) : (
+              <div className="p-4 bg-white rounded-2xl shadow-sm text-indigo-500">
+                {/* Show Image icon if it's an image type but no URL yet, otherwise File icon */}
+                {f.mime_type?.includes('image') ? <ImageIcon size={40}/> : <FileText size={40}/>}
+              </div>
+          )}
+      </div>
 
-                      <div className="p-4">
-                          <div className="flex justify-between items-start mb-2">
-                             <p className="font-semibold text-gray-800 truncate text-sm flex-1 pr-2" title={f.name}>{f.name}</p>
-                             <button onClick={() => handleToggleStar(f.id, 'file')} className={`transition-colors ${f.is_starred ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}><Star size={16} fill={f.is_starred ? "currentColor" : "none"}/></button>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-gray-400 font-medium">
-                             <span>{formatBytes(f.size_bytes)}</span>
-                             <span>{new Date(f.created_at).toLocaleDateString()}</span>
-                          </div>
-                          
-                          {/* QUICK ACTIONS ROW */}
-                          <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                              <div className="flex gap-1">
-                                <button onClick={() => handleDownload(f.id, f.name)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Download"><Download size={16} /></button>
-                                <button onClick={() => openShareModal(f)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition" title="Share"><Share2 size={16} /></button>
-                                <button onClick={() => handleRename(f.id, f.name)} className="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition" title="Rename"><Edit2 size={16} /></button>
-                              </div>
-                              <button onClick={() => handleDelete(f.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={16} /></button>
-                          </div>
-                      </div>
-                      </div>
-                  )})}
+      {/* FILE INFO & ACTIONS */}
+      <div className="p-4">
+          <div className="flex justify-between items-start mb-2">
+             <p className="font-semibold text-gray-800 truncate text-sm flex-1 pr-2" title={f.name}>{f.name}</p>
+             <button 
+               onClick={() => handleToggleStar(f.id, 'file')} 
+               className={`transition-colors ${f.is_starred ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+             >
+               <Star size={16} fill={f.is_starred ? "currentColor" : "none"}/>
+             </button>
+          </div>
+          <div className="flex items-center justify-between text-xs text-gray-400 font-medium">
+             <span>{formatBytes(f.size_bytes)}</span>
+             <span>{new Date(f.created_at).toLocaleDateString()}</span>
+          </div>
+          
+          {/* QUICK ACTIONS ROW */}
+          <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <div className="flex gap-1">
+                <button onClick={() => handleDownload(f.id, f.name)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Download"><Download size={16} /></button>
+                <button onClick={() => openShareModal(f)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition" title="Share"><Share2 size={16} /></button>
+                <button onClick={() => handleRename(f.id, f.name)} className="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition" title="Rename"><Edit2 size={16} /></button>
+              </div>
+              <button onClick={() => handleDelete(f.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={16} /></button>
+          </div>
+      </div>
+    </div>
+  )
+})}
               </div>
               )}
             </div>
@@ -487,8 +540,127 @@ export default function Dashboard() {
       {/* ... (Keep existing modals unchanged, they are functional overlays) ... */}
       {previewFile && ( <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => setPreviewFile(null)}> <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}> <div className="p-4 border-b flex justify-between items-center bg-white z-10"> <h3 className="font-semibold text-gray-800 truncate px-2 text-lg">{previewFile.name}</h3> <button onClick={() => setPreviewFile(null)} className="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition"><X size={24} /></button> </div> <div className="flex-1 bg-gray-100 flex items-center justify-center p-8 overflow-auto min-h-[400px]"> {previewFile.type.startsWith("image/") ? <img src={previewFile.url} alt="Preview" className="max-w-full max-h-[75vh] object-contain shadow-2xl rounded-lg" /> : <iframe src={previewFile.url} className="w-full h-[75vh] bg-white rounded-lg shadow-lg border border-gray-200" title="PDF Preview"></iframe>} </div> <div className="p-4 border-t bg-white flex justify-end"> <a href={previewFile.url} download={previewFile.name} className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 flex items-center gap-2 text-sm font-bold shadow-lg shadow-blue-500/30 transition transform active:scale-95"><Download size={20}/> Download Original</a> </div> </div> </div> )}
       {moveFile && ( <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[80] flex items-center justify-center p-4" onClick={() => setMoveFile(null)}> <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}> <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-gray-800">Move items to...</h3><button onClick={() => setMoveFile(null)}><X size={20} className="text-gray-400 hover:text-gray-600" /></button></div> <div className="max-h-60 overflow-y-auto border border-gray-100 rounded-xl mb-6 custom-scrollbar"> <div onClick={() => handleMoveExecute(null)} className={`p-4 border-b border-gray-50 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition ${moveFile.folder_id === null ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-600'}`}><HardDrive size={20} /> My Drive (Root)</div> {allFolders.filter(f => f.id !== moveFile.folder_id).map(f => ( <div key={f.id} onClick={() => handleMoveExecute(f.id)} className="p-4 border-b border-gray-50 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition text-gray-600"><Folder size={20} className="text-blue-300" /> {f.name}</div> ))} </div> </div> </div> )}
-      {shareFile && ( <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[80] flex items-center justify-center p-4" onClick={() => setShareFile(null)}> <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}> <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-gray-800">Share "{shareFile.name}"</h3><button onClick={() => setShareFile(null)}><X size={20} className="text-gray-400 hover:text-gray-600" /></button></div> <div className="space-y-6"> <div><label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">Invite People</label><div className="flex gap-2"><input type="email" placeholder="Email address" value={shareEmail} onChange={e => setShareEmail(e.target.value)} className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" /><select value={sharePermission} onChange={e => setSharePermission(e.target.value)} className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none"><option value="viewer">Viewer</option><option value="editor">Editor</option></select><button onClick={handleShareSubmit} className="bg-blue-600 text-white px-5 rounded-xl font-semibold hover:bg-blue-700 transition">Send</button></div></div> <div><label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">Public Access</label><div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100"> <div className="flex items-center gap-3"> <div className={`p-2 rounded-full ${publicToken ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-500'}`}><LinkIcon size={20}/></div> <div> <p className="text-sm font-semibold text-gray-700">{publicToken ? "Link is active" : "Restricted"}</p> <p className="text-xs text-gray-500">{publicToken ? "Anyone with link can view" : "Only added people"}</p> </div> </div> {publicToken ? <div className="flex gap-2"><button onClick={copyToClipboard} className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition">{copied ? "Copied" : "Copy"}</button><button onClick={() => {setLinkPassword(""); setLinkExpiry(""); handleToggleLink();}} className="text-xs font-bold text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg transition">Disable</button></div> : <button onClick={() => setLinkSettingsOpen(true)} className="text-xs font-bold text-gray-600 hover:bg-white bg-white border border-gray-200 shadow-sm px-4 py-2 rounded-lg transition">Create Link</button>} </div> </div> </div> </div> </div> )}
-      {showProfileModal && ( <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4" onClick={() => setShowProfileModal(false)}> <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 animate-in zoom-in-95 duration-200 text-center" onClick={e => e.stopPropagation()}> <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center text-4xl font-bold mx-auto mb-6 shadow-xl shadow-blue-500/30">{getUserInitial()}</div> <h2 className="text-2xl font-bold text-gray-800 mb-1">{user.full_name || "User"}</h2> <p className="text-gray-500 mb-6">{user.email}</p> <div className="space-y-4 text-left"> <div><label className="text-xs font-bold text-gray-400 uppercase">Full Name</label><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full mt-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition" /></div> <button onClick={handleUpdateProfile} className="w-full bg-black text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition shadow-lg">Save Changes</button> </div> </div> </div> )}
+{shareFile && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[80] flex items-center justify-center p-4" onClick={() => setShareFile(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            
+            {/* --- MODAL HEADER --- */}
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">Share "{shareFile.name}"</h3>
+              <button onClick={() => setShareFile(null)}><X size={20} className="text-gray-400 hover:text-gray-600" /></button>
+            </div>
+
+            <div className="space-y-6">
+              
+              {/* --- SECTION 1: INVITE PEOPLE --- */}
+              <div>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">Invite People</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="email" 
+                    placeholder="Email address" 
+                    value={shareEmail} 
+                    onChange={e => setShareEmail(e.target.value)} 
+                    className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" 
+                  />
+                  <select 
+                    value={sharePermission} 
+                    onChange={e => setSharePermission(e.target.value)} 
+                    className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none"
+                  >
+                    <option value="viewer">Viewer</option>
+                    <option value="editor">Editor</option>
+                  </select>
+                  <button onClick={handleShareSubmit} className="bg-blue-600 text-white px-5 rounded-xl font-semibold hover:bg-blue-700 transition">Send</button>
+                </div>
+              </div>
+
+              {/* --- SECTION 2: PUBLIC ACCESS --- */}
+              <div>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">Public Access</label>
+                
+                <div className="bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                  
+                  {/* Status Bar */}
+                  <div className="flex items-center justify-between p-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-full ${publicToken ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-500'}`}>
+                        <LinkIcon size={20}/>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700">{publicToken ? "Link is active" : "Restricted"}</p>
+                        <p className="text-xs text-gray-500">{publicToken ? "Anyone with link can view" : "Only added people"}</p>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    {publicToken ? (
+                      <div className="flex gap-2">
+                        <button onClick={copyToClipboard} className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition">
+                          {copied ? "Copied" : "Copy"}
+                        </button>
+                        <button onClick={() => {setLinkPassword(""); setLinkExpiry(""); handleToggleLink();}} className="text-xs font-bold text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg transition">
+                          Disable
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => setLinkSettingsOpen(!linkSettingsOpen)} 
+                        className="text-xs font-bold text-gray-600 hover:bg-white bg-white border border-gray-200 shadow-sm px-4 py-2 rounded-lg transition"
+                      >
+                        {linkSettingsOpen ? "Cancel" : "Create Link"}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Settings Panel (Password/Expiry) - THIS WAS MISSING */}
+                  <AnimatePresence>
+                    {linkSettingsOpen && !publicToken && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="px-4 pb-4 border-t border-gray-200 bg-gray-50"
+                      >
+                        <div className="pt-4 space-y-3">
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">Password (Optional)</label>
+                            <input 
+                              type="password" 
+                              placeholder="Set a password" 
+                              value={linkPassword} 
+                              onChange={e => setLinkPassword(e.target.value)} 
+                              className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">Expiration (Optional)</label>
+                            <input 
+                              type="datetime-local" 
+                              value={linkExpiry} 
+                              onChange={e => setLinkExpiry(e.target.value)} 
+                              className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            />
+                          </div>
+                          <button 
+                            onClick={handleToggleLink} 
+                            className="w-full bg-black text-white py-2 rounded-lg text-sm font-bold hover:bg-gray-800 transition shadow-md mt-2"
+                          >
+                            Enable Public Link
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+            {showProfileModal && ( <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4" onClick={() => setShowProfileModal(false)}> <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 animate-in zoom-in-95 duration-200 text-center" onClick={e => e.stopPropagation()}> <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center text-4xl font-bold mx-auto mb-6 shadow-xl shadow-blue-500/30">{getUserInitial()}</div> <h2 className="text-2xl font-bold text-gray-800 mb-1">{user.full_name || "User"}</h2> <p className="text-gray-500 mb-6">{user.email}</p> <div className="space-y-4 text-left"> <div><label className="text-xs font-bold text-gray-400 uppercase">Full Name</label><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full mt-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition" /></div> <button onClick={handleUpdateProfile} className="w-full bg-black text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition shadow-lg">Save Changes</button> </div> </div> </div> )}
       {versionFile && ( <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[90] flex items-center justify-center p-4" onClick={() => setVersionFile(null)}> <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}> <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-gray-800">Version History</h3><button onClick={() => setVersionFile(null)}><X size={20} className="text-gray-400 hover:text-gray-600"/></button></div> <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2"> {versions.length === 0 && <p className="text-center text-gray-400 py-8">No history available.</p>} {versions.map(v => ( <div key={v.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100"> <div><p className="font-bold text-gray-700 text-sm">Version {v.version}</p><p className="text-xs text-gray-500 mt-0.5">{new Date(v.created_at).toLocaleString()}</p></div> <button onClick={() => handleRestoreVersion(v.id)} className="text-xs bg-white border border-gray-200 shadow-sm px-3 py-1.5 rounded-lg hover:bg-gray-50 font-medium text-gray-600 flex items-center gap-1"><RotateCcw size={12}/> Restore</button> </div> ))} </div> </div> </div> )}
     </div>
   );
