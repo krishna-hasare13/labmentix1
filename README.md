@@ -40,6 +40,10 @@ Table notes:
 - Uploads: versioning stored in `file_versions`; soft deletes go to trash; permanent delete also removes storage objects; storage usage endpoint enforces a 1 GB ceiling ([backend/routes/files.js](backend/routes/files.js)).
 - Logging: user actions recorded for activity feed ([backend/utils/logger.js](backend/utils/logger.js) and [backend/routes/activities.js](backend/routes/activities.js)).
 
+## Live Deployment
+- **Backend (Render):** https://labmentix1.onrender.com/
+- **Frontend (Vercel):** https://labmentix1-qox9.vercel.app/
+
 ## Run Locally
 ### Prerequisites
 - Node.js 18+

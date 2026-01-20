@@ -3,14 +3,17 @@ import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { ArrowRight, Loader2, Check, X, ShieldCheck, Zap, Globe, Github } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { createClient } from "@supabase/supabase-js";
+
+// Adjust the path to where your supabaseClient.js file is located
+// If Register.jsx is in 'src/pages', and the config is in 'src', go up one level:
+import { supabase } from "../supabaseClient";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // --- INITIALIZE SUPABASE CLIENT ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+
 
 // --- COMPONENT 1: FLOATING LABEL INPUT ---
 const FloatingInput = ({ label, type, value, onChange, id }) => {
