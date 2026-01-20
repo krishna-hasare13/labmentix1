@@ -1,19 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { ArrowRight, Loader2, Check, X, ShieldCheck, Zap, Globe, Github } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// Adjust the path to where your supabaseClient.js file is located
-// If Register.jsx is in 'src/pages', and the config is in 'src', go up one level:
+// ✅ Correct Import (Uses the shared client)
 import { supabase } from "../supabaseClient";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
-// --- INITIALIZE SUPABASE CLIENT ---
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
 
 // --- COMPONENT 1: FLOATING LABEL INPUT ---
 const FloatingInput = ({ label, type, value, onChange, id }) => {
@@ -93,7 +87,7 @@ export default function Register() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
-          redirectTo: window.location.origin // Redirects back to this page after login
+          redirectTo: window.location.origin 
         }
       });
       if (error) throw error;
@@ -103,27 +97,19 @@ export default function Register() {
     }
   };
 
-  // --- LISTEN FOR AUTH CHANGES (Redirect after GitHub login) ---
-  useEffect(() => {
-    const checkSession = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-            localStorage.setItem("token", session.access_token);
-            // Optionally save user info: localStorage.setItem("user", JSON.stringify(session.user));
-            navigate("/dashboard");
-        }
-    };
-    checkSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        localStorage.setItem("token", session.access_token);
-        navigate("/dashboard");
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+  /* 🛑 I COMMENTED THIS OUT SO YOU CAN SEE THE PAGE 
+     Uncomment this section later when you are done testing!
+  */
+  // useEffect(() => {
+  //   const checkSession = async () => {
+  //       const { data: { session } } = await supabase.auth.getSession();
+  //       if (session) {
+  //           localStorage.setItem("token", session.access_token);
+  //           navigate("/dashboard");
+  //       }
+  //   };
+  //   checkSession();
+  // }, [navigate]);
 
   // --- HANDLE EMAIL REGISTER ---
   const handleRegister = async (e) => {
@@ -147,9 +133,17 @@ export default function Register() {
     }
   };
 
+  // --- TEMPORARY LOGOUT BUTTON (For Testing) ---
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem("token");
+    window.location.reload();
+  };
+
   return (
-    <div className="min-h-screen flex bg-white font-sans selection:bg-indigo-100 selection:text-indigo-900">
-      
+    <div className="min-h-screen flex bg-white font-sans selection:bg-indigo-100 selection:text-indigo-900 relative">
+
+
       {/* --- LEFT SIDE: FORM --- */}
       <motion.div 
         initial={{ opacity: 0, x: -20 }}
