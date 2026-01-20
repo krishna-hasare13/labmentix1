@@ -250,7 +250,7 @@ const handleToggleLink = async () => {
           <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 text-white p-2 rounded-lg shadow-lg shadow-blue-500/30">
             <CloudUpload size={24} />
           </div>
-          <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600">CloudDrive</h1>
+          <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600">KCloud</h1>
         </div>
 
         <div className="flex-1 max-w-2xl mx-8 relative group">
